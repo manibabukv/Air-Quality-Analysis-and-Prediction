@@ -1,0 +1,168 @@
+---
+title: "Multinomial Logistic Regression"
+author: "Venkata Mani Babu Karri"
+date: "2023-05-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+```{r}
+#Reading and Loading the data
+data <- read.csv('/Users/macuser/Downloads/city_day.csv', na.strings = c("", "NA", "N/A"))
+head(data)
+colnames(data)
+```
+
+```{r}
+#Replacing null values with median values for numeric values and with Moderate for AQI_Bucket
+library(zoo)
+data$PM2.5 <- na.aggregate(data$PM2.5, FUN = median)
+data$PM10 <- na.aggregate(data$PM10, FUN = median)
+data$NO <- na.aggregate(data$NO, FUN = median)
+data$NO2 <- na.aggregate(data$NO2, FUN = median)
+data$NOx <- na.aggregate(data$NOx, FUN = median)
+data$NH3 <- na.aggregate(data$NH3, FUN = median)
+data$CO <- na.aggregate(data$CO, FUN = median)
+data$SO2 <- na.aggregate(data$SO2, FUN = median)
+data$O3 <- na.aggregate(data$O3, FUN = median)
+data$Benzene <- na.aggregate(data$Benzene, FUN = median)
+data$Toluene <- na.aggregate(data$Toluene, FUN = median)
+data$Xylene <- na.aggregate(data$Xylene, FUN = median)
+data$AQI <- na.aggregate(data$AQI, FUN = median)
+
+data$AQI_Bucket[is.na(data$AQI_Bucket)] <- 'Moderate'
+data$AQI_Bucket <- replace(data$AQI_Bucket, data$AQI_Bucket == '', 'Moderate')
+data$AQI_Bucket <- replace(data$AQI_Bucket, data$AQI_Bucket == 'Very Poor', 'Very_Poor')
+```
+
+```{r}
+#Checking presence of null values
+any(is.na(data))
+```
+
+```{r}
+#Class wise distribution
+table(data$AQI_Bucket)
+```
+
+```{r}
+#cross validation function
+library(caret)
+trControl_mnl <- trainControl(method = "cv",
+                              number = 10,
+                              search = "grid",
+                              classProbs = TRUE,
+                              summaryFunction = multiClassSummary)
+
+tuneGrid_mnl <- expand.grid(decay = seq(0, 1, by = 0.1))
+```
+
+```{r}
+#spliting data into train and test data
+set.seed(2091)
+index <- caret::createDataPartition(data$AQI_Bucket,
+                                    p = 0.8,
+                                    list = FALSE)
+
+train_data <- data[index, ]
+test_data <- data[-index, ]
+```
+
+```{r}
+#Transforming class level names into acceptable r format
+levels(train_data$AQI_Bucket) <- make.names(levels(train_data$AQI_Bucket))
+levels(test_data$AQI_Bucket) <- make.names(levels(test_data$AQI_Bucket))
+```
+
+```{r}
+install.packages('MLmetrics')
+```
+
+```{r}
+#Multinomial Logistic Regression model 1
+library(MLmetrics)
+model_mnl <- caret::train(AQI_Bucket ~ PM2.5 + PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Benzene + Toluene + Xylene, 
+                          data = train_data,
+                          method = "multinom",
+                          maxit = 100,
+                          trace = FALSE, # suppress iterations
+                          tuneGrid = tuneGrid_mnl,
+                          trControl = trControl_mnl
+                          )
+```
+
+```{r}
+#Best decay value
+model_mnl$bestTune
+```
+
+```{r}
+#Model 1 results for each decay value
+library(dplyr)
+model_mnl$results %>% 
+   select(decay, AUC, Accuracy)
+```
+
+```{r}
+#Confusion Matrix and other Statistics
+library(caret)
+
+# Generate predictions using the model
+predictions <- predict(model_mnl, newdata = test_data)
+
+# Convert both vectors to factors with the same levels
+predicted <- factor(predictions, levels = c("Good", "Moderate", "Poor", "Satisfactory", "Severe", "Very_Poor"))
+actual <- factor(test_data$AQI_Bucket, levels = c("Good", "Moderate", "Poor", "Satisfactory", "Severe", "Very_Poor"))
+
+# Compute confusion matrix and related metrics
+confusionMatrix(predicted, actual)
+```
+
+```{r}
+#Multinomial Logistic Regression model 2
+library(MLmetrics)
+model_mnl2 <- caret::train(AQI_Bucket ~ PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Toluene + Xylene, 
+                          data = train_data,
+                          method = "multinom",
+                          maxit = 100,
+                          trace = FALSE, # suppress iterations
+                          tuneGrid = tuneGrid_mnl,
+                          trControl = trControl_mnl
+                          )
+```
+
+```{r}
+#Best decay value
+model_mnl2$bestTune
+```
+
+```{r}
+#Model 1 results for each decay value
+library(dplyr)
+model_mnl2$results %>% 
+   select(decay, AUC, Accuracy)
+```
+
+```{r}
+#Confusion Matrix and other Statistics for model 2
+library(caret)
+
+# Generate predictions using the model
+predictions2 <- predict(model_mnl2, newdata = test_data)
+
+# Convert both vectors to factors with the same levels
+predicted2 <- factor(predictions2, levels = c("Good", "Moderate", "Poor", "Satisfactory", "Severe", "Very_Poor"))
+actual2 <- factor(test_data$AQI_Bucket, levels = c("Good", "Moderate", "Poor", "Satisfactory", "Severe", "Very_Poor"))
+
+# Compute confusion matrix and related metrics
+confusionMatrix(predicted2, actual2)
+```

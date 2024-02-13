@@ -1,0 +1,255 @@
+---
+title: "Air Quality Analysis Project 2023"
+author: "Group-9"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+
+
+```{r}
+# load data set
+
+data <- read.csv('C:/Users/nevan/Downloads/city_day.csv')
+head(data)
+colnames(data)
+```
+
+```{r}
+# check if there are any nan values in the datasets
+any(is.na(data))
+```
+
+```{r}
+# fill nan with median
+
+#install.packages('zoo')
+library(zoo)
+data$PM2.5 <- na.aggregate(data$PM2.5, FUN = median)
+data$PM10 <- na.aggregate(data$PM10, FUN = median)
+data$NO <- na.aggregate(data$NO, FUN = median)
+data$NO2 <- na.aggregate(data$NO2, FUN = median)
+data$NOx <- na.aggregate(data$NOx, FUN = median)
+data$NH3 <- na.aggregate(data$NH3, FUN = median)
+data$CO <- na.aggregate(data$CO, FUN = median)
+data$SO2 <- na.aggregate(data$SO2, FUN = median)
+data$O3 <- na.aggregate(data$O3, FUN = median)
+data$Benzene <- na.aggregate(data$Benzene, FUN = median)
+data$Toluene <- na.aggregate(data$Toluene, FUN = median)
+data$Xylene <- na.aggregate(data$Xylene, FUN = median)
+data$AQI <- na.aggregate(data$AQI, FUN = median)
+
+data$AQI_Bucket[is.na(data$AQI_Bucket)] <- 'Moderate'
+data$AQI_Bucket <- replace(data$AQI_Bucket, data$AQI_Bucket == '', 'Moderate')
+
+```
+
+```{r}
+data
+```
+
+
+
+```{r}
+any(is.na(data))
+```
+
+
+```{r}
+# convert char to numeric
+#data$AQI_Class <- as.numeric(data$AQI_Bucket)
+
+data$AQI_Bucket <- factor(data$AQI_Bucket, levels = c("Moderate", "Severe", "Poor", "Very Poor", "Satisfactory", "Good"), ordered = FALSE)
+data
+
+data <- na.omit(data)
+```
+
+
+```{r}
+# train-test split (70-30)
+
+library(caret)
+
+
+train_ix <- createDataPartition(data$AQI_Bucket, p=0.7, list=FALSE)
+train <- data[train_ix, ]
+test <- data[-train_ix, ]
+
+train
+test
+```
+
+
+```{r}
+library(TeachingDemos)
+char2seed("FinalProject", set = TRUE)
+```
+
+```{r}
+library(leaps)
+model <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=train, nvmax = 12) 
+
+summary <- summary(model)
+summary
+
+plot(summary$cp, type = "l")
+points(which.min(summary$cp),summary$cp[which.min(summary$cp)])
+
+plot(summary$bic, type = "l")
+points(which.min(summary$bic),summary$bic[which.min(summary$bic)])
+
+plot(summary$adjr2, type = "l")
+points(which.max(summary$adjr2),summary$adjr2[which.max(summary$adjr2)])
+
+```
+
+```{r}
+char2seed("FinalProjectrandomForest", set = TRUE)
+library(randomForest)
+library(caret)
+
+#Creating a function that takes ntree value to search for what ntree value is best for prediction 
+rf_accuracy_ntree <- function(ntreevalue) {
+  rf_model <- randomForest(AQI_Bucket ~ PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Toluene+Xylene, data = train, ntree = ntreevalue, importance = TRUE)
+  pred <- predict(rf_model, test)
+  return(sum(pred == test$AQI_Bucket) / nrow(test))
+}
+
+#Creating a function that takes mtry value to search for what mtry value is best for prediction 
+rf_accuracy_mtry <- function(mtry) {
+  rf_model <- randomForest(AQI_Bucket ~ PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Toluene+Xylene, data = train, mtry = mtry, ntree = best_ntree, importance = TRUE)
+  pred <- predict(rf_model, test)
+  return(sum(pred == test$AQI_Bucket) / nrow(test))
+}
+
+#Created a set of 50 - 1000 of 50 step increments
+ntree_values <- seq(50, 500, by = 50)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores <- rep(0, length(ntree_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(ntree_values)) {
+  ntree <- ntree_values[i]
+  accuracy_scores[i] <- rf_accuracy_ntree(ntree)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_ntree <- ntree_values[which.max(accuracy_scores)]
+
+#Created a set of 2 - 10 of 2 step increments
+mtry_values <- seq(2, 10, by = 2)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores_mtry <- rep(0, length(mtry_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(mtry_values)) {
+  mtry <- mtry_values[i]
+  accuracy_scores_mtry[i] <- rf_accuracy_mtry(mtry)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_mtry <- mtry_values[which.max(accuracy_scores_mtry)]
+
+# define the training control for cross-validation
+train_control <- trainControl(method = "cv", number = 5)
+
+# train the model using train() function with pre-determined ntree value
+final_model <- train(AQI_Bucket ~  PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Toluene + Xylene, 
+                  data = train,
+                  method = "rf",
+                  ntree = best_ntree,
+                  trControl = train_control,
+                  importance = TRUE)
+
+final_model_pred <- predict(final_model, test)
+
+best_ntree
+sum(final_model_pred == test$AQI_Bucket) / nrow(test)
+confusionMatrix(final_model_pred, test$AQI_Bucket, mode = "everything")
+```
+
+```{r}
+char2seed("FinalProjectrandomForest", set = TRUE)
+library(randomForest)
+library(caret)
+
+#Creating a function that takes ntree value to search for what ntree value is best for prediction 
+rf_accuracy_ntree <- function(ntreevalue) {
+  rf_model <- randomForest(AQI_Bucket ~ PM2.5 + PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Benzene + Toluene + Xylene, data = train, ntree = ntreevalue, importance = TRUE)
+  pred <- predict(rf_model, test)
+  return(sum(pred == test$AQI_Bucket) / nrow(test))
+}
+
+#Creating a function that takes mtry value to search for what mtry value is best for prediction 
+rf_accuracy_mtry <- function(mtry) {
+  rf_model <- randomForest(AQI_Bucket ~ PM2.5 + PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Benzene + Toluene + Xylene, data = train, mtry = mtry, ntree = best_ntree, importance = TRUE)
+  pred <- predict(rf_model, test)
+  return(sum(pred == test$AQI_Bucket) / nrow(test))
+}
+
+#Created a set of 50 - 1000 of 50 step increments
+ntree_values <- seq(50, 500, by = 50)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores <- rep(0, length(ntree_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(ntree_values)) {
+  ntree <- ntree_values[i]
+  accuracy_scores[i] <- rf_accuracy_ntree(ntree)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_ntree <- ntree_values[which.max(accuracy_scores)]
+
+#Created a set of 2 - 10 of 2 step increments
+mtry_values <- seq(2, 10, by = 2)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores_mtry <- rep(0, length(mtry_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(mtry_values)) {
+  mtry <- mtry_values[i]
+  accuracy_scores_mtry[i] <- rf_accuracy_mtry(mtry)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_mtry <- mtry_values[which.max(accuracy_scores_mtry)]
+
+# define the training control for cross-validation
+train_control <- trainControl(method = "cv", number = 5)
+
+# train the model using train() function with pre-determined ntree value
+final_model <- train(AQI_Bucket ~ PM2.5 + PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Benzene + Toluene + Xylene, 
+                  data = train,
+                  method = "rf",
+                  ntree = best_ntree,
+                  trControl = train_control,
+                  importance = TRUE)
+
+final_model_pred <- predict(final_model, test)
+
+best_ntree
+best_mtry
+sum(final_model_pred == test$AQI_Bucket) / nrow(test)
+confusionMatrix(final_model_pred, test$AQI_Bucket, mode = "everything")
+```
+

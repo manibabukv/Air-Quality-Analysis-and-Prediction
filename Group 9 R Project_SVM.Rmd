@@ -1,0 +1,356 @@
+---
+title: "Air Quality Analysis Project 2023"
+author: "Group-9 Anuja"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+
+
+```{r}
+# load data set
+
+data <- read.csv('D:/OneDrive - Indiana University/Spring23/H515 Data Analytics/Project/city_day.csv')
+head(data)
+colnames(data)
+```
+
+```{r}
+#install.packages('msno')
+#library(msno)
+#msno.bar(data)
+```
+```{r}
+# check if there are any nan values in the datasets
+any(is.na(data))
+```
+
+```{r}
+# fill nan with median
+
+#install.packages('zoo')
+library(zoo)
+data$PM2.5 <- na.aggregate(data$PM2.5, FUN = median)
+data$PM10 <- na.aggregate(data$PM10, FUN = median)
+data$NO <- na.aggregate(data$NO, FUN = median)
+data$NO2 <- na.aggregate(data$NO2, FUN = median)
+data$NOx <- na.aggregate(data$NOx, FUN = median)
+data$NH3 <- na.aggregate(data$NH3, FUN = median)
+data$CO <- na.aggregate(data$CO, FUN = median)
+data$SO2 <- na.aggregate(data$SO2, FUN = median)
+data$O3 <- na.aggregate(data$O3, FUN = median)
+data$Benzene <- na.aggregate(data$Benzene, FUN = median)
+data$Toluene <- na.aggregate(data$Toluene, FUN = median)
+data$Xylene <- na.aggregate(data$Xylene, FUN = median)
+data$AQI <- na.aggregate(data$AQI, FUN = median)
+
+data$AQI_Bucket[is.na(data$AQI_Bucket)] <- 'Moderate'
+data$AQI_Bucket <- replace(data$AQI_Bucket, data$AQI_Bucket == '', 'Moderate')
+
+```
+
+```{r}
+data
+```
+
+
+
+```{r}
+any(is.na(data))
+```
+
+
+```{r}
+# convert char to numeric
+#data$AQI_Class <- as.numeric(data$AQI_Bucket)
+
+data$AQI_Bucket <- factor(data$AQI_Bucket, levels = c("Moderate", "Severe", "Poor", "Very Poor", "Satisfactory", "Good"), ordered = FALSE)
+data
+
+
+data <- na.omit(data)
+```
+
+
+```{r}
+# train-test split (70-30)
+
+library(caret)
+
+train_ix <- createDataPartition(data$AQI_Bucket, p=0.7, list=FALSE)
+train <- data[train_ix, ]
+test <- data[-train_ix, ]
+
+train
+test
+```
+
+
+
+
+```{r}
+# split the data set into feature-class, x<-feature and y<-class
+feature <- c('PM2.5','PM10','NO','NO2','NOx','NH3','CO','SO2','O3','Benzene','Toluene','Xylene')
+x_train <- train[, feature]
+x_test <- test[, feature]
+
+y_train <- train[, 'AQI_Bucket']
+y_test <- test[, 'AQI_Bucket']
+```
+
+
+```{r}
+#install.packages('TeachingDemos')
+library(TeachingDemos)
+char2seed("FinalProject", set = TRUE)
+```
+
+```{r}
+# feature selection
+library(leaps)
+model <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=train, nvmax = 12) 
+
+summary <- summary(model)
+summary
+
+plot(summary$cp, type = "l")
+points(which.min(summary$cp),summary$cp[which.min(summary$cp)])
+
+plot(summary$bic, type = "l")
+points(which.min(summary$bic),summary$bic[which.min(summary$bic)])
+
+plot(summary$adjr2, type = "l")
+points(which.max(summary$adjr2),summary$adjr2[which.max(summary$adjr2)])
+
+```
+
+```{r}
+# Split the training data by AQI_Bucket type
+ModerateSubset = subset(train, AQI_Bucket == "Moderate")
+SatisfactorySubset = subset(train, AQI_Bucket == "Satisfactory")
+SevereSubset = subset(train, AQI_Bucket == "Severe")
+PoorSubset = subset(train, AQI_Bucket == "Poor")
+VeryPoorSubset = subset(train, AQI_Bucket == "Very Poor")
+
+Moderatemodel <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=ModerateSubset, nvmax = 12) 
+Satisfactorymodel <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=SatisfactorySubset, nvmax = 12) 
+Severemodel <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=SevereSubset, nvmax = 12) 
+Poormodel <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=PoorSubset, nvmax = 12) 
+VeryPoormodel <- regsubsets(AQI_Bucket ~ PM2.5+PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Benzene+Toluene+Xylene, data=VeryPoorSubset, nvmax = 12) 
+
+coef(Moderatemodel, which.min(summary$cp))
+coef(Satisfactorymodel, which.min(summary$cp))
+coef(Severemodel, which.min(summary$cp))
+coef(Poormodel, which.min(summary$cp))
+coef(VeryPoormodel, which.min(summary$cp))
+```
+
+```{r}
+# parameter tuning
+char2seed("FinalProjectsvm", set = TRUE)
+#library(randomForest)
+library(e1071) # svm
+library(caret)
+
+#Creating a function that takes ntree value to search for what ntree value is best for prediction 
+  svm_accuracy_ntree <- function(gamma_value) {
+  # rf_model <- randomForest(AQI_Bucket ~ PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Toluene+Xylene, data = train, ntree = ntreevalue, importance = TRUE)
+  # Train an SVM model using the radial basis function (RBF) kernel
+  svm_model <- svm(x_train, y_train, gamma=gamma_value)
+  pred <- predict(svm_model, x_test)
+  confusion_matrix <- table(pred, y_test)
+  accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+  return(accuracy)  
+  #return(sum(pred == y_test$AQI_Bucket) / nrow(y_test))
+}
+
+#Creating a function that takes mtry value to search for what mtry value is best for prediction 
+  svm_accuracy_mtry <- function(c_value) {
+  #rf_model <- randomForest(AQI_Bucket ~ PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Toluene+Xylene, data = train, mtry = mtry, ntree = best_ntree, importance = TRUE)
+  svm_model <- svm(x_train, y_train, gamma=best_gamma, degree = c_value)
+  pred <- predict(svm_model, x_test)
+  confusion_matrix <- table(pred, y_test)
+  accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+  return(accuracy)  
+  #return(sum(pred == y_test$AQI_Bucket) / nrow(y_test))
+}
+
+#Created a set of 1,0.1,0.01,0.001 step increments
+ntree_values <- c(1,0.1,0.01,0.001)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores <- rep(0, length(ntree_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(ntree_values)) {
+  ntree <- ntree_values[i]
+  accuracy_scores[i] <- svm_accuracy_ntree(ntree)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_gamma <- ntree_values[which.max(accuracy_scores)]
+
+#Created a set of 2 - 10 of 2 step increments
+#mtry_values <- seq(2, 10, by = 2)
+mtry_values <- c(0.1,1,10, 100)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores_mtry <- rep(0, length(mtry_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(mtry_values)) {
+  mtry <- mtry_values[i]
+  accuracy_scores_mtry[i] <- svm_accuracy_mtry(mtry)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_c <- mtry_values[which.max(accuracy_scores_mtry)]
+
+```
+
+```{r}
+final_model <- svm(x_train, y_train, gamma=best_gamma, degree=best_c)
+
+final_model_pred <- predict(final_model, x_test)
+
+confusionMatrix(final_model_pred, y_test, mode = "everything")
+```
+
+```{r}
+# split the data set into feature-class, x<-feature and y<-class with best features (remove pm2.5, benzen)
+feature <- c('PM10','NO','NO2','NOx','NH3','CO','SO2','O3','Toluene','Xylene')
+x_train <- train[, feature]
+x_test <- test[, feature]
+
+y_train <- train[, 'AQI_Bucket']
+y_test <- test[, 'AQI_Bucket']
+```
+
+```{r}
+# reconstructing the model by using the best features (remove pm2.5, benzen)
+char2seed("FinalProjectsvm", set = TRUE)
+#library(randomForest)
+library(e1071) # svm
+library(caret)
+
+#Creating a function that takes ntree value to search for what ntree value is best for prediction 
+  svm_accuracy_ntree <- function(gamma_value) {
+  # rf_model <- randomForest(AQI_Bucket ~ PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Toluene+Xylene, data = train, ntree = ntreevalue, importance = TRUE)
+  # Train an SVM model using the radial basis function (RBF) kernel
+  svm_model <- svm(x_train, y_train, gamma=gamma_value)
+  pred <- predict(svm_model, x_test)
+  confusion_matrix <- table(pred, y_test)
+  accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+  return(accuracy)  
+  #return(sum(pred == y_test$AQI_Bucket) / nrow(y_test))
+}
+
+#Creating a function that takes mtry value to search for what mtry value is best for prediction 
+  svm_accuracy_mtry <- function(c_value) {
+  #rf_model <- randomForest(AQI_Bucket ~ PM10+NO+NO2+NOx+NH3+CO+SO2+O3+Toluene+Xylene, data = train, mtry = mtry, ntree = best_ntree, importance = TRUE)
+  svm_model <- svm(x_train, y_train, gamma=best_gamma, degree = c_value)
+  pred <- predict(svm_model, x_test)
+  confusion_matrix <- table(pred, y_test)
+  accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+  return(accuracy)  
+  #return(sum(pred == y_test$AQI_Bucket) / nrow(y_test))
+}
+
+#Created a set of 1,0.1,0.01,0.001 step increments
+ntree_values <- c(1,0.1,0.01,0.001)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores <- rep(0, length(ntree_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(ntree_values)) {
+  ntree <- ntree_values[i]
+  accuracy_scores[i] <- svm_accuracy_ntree(ntree)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_gamma <- ntree_values[which.max(accuracy_scores)]
+
+#Created a set of 2 - 10 of 2 step increments
+#mtry_values <- seq(2, 10, by = 2)
+mtry_values <- c(0.1,1,10, 100)
+
+#Created a array for every step in the ntree_values array
+accuracy_scores_mtry <- rep(0, length(mtry_values))
+
+#For each value run the created function and insert the prediction rating into the empty array
+for (i in seq_along(mtry_values)) {
+  mtry <- mtry_values[i]
+  accuracy_scores_mtry[i] <- svm_accuracy_mtry(mtry)
+}
+
+#Assign the ntree value with the best prediction score to a variable
+best_c <- mtry_values[which.max(accuracy_scores_mtry)]
+```
+
+```{r}
+final_model <- svm(x_train, y_train, gamma=best_gamma, degree=best_c)
+
+final_model_pred <- predict(final_model, x_test)
+
+confusion_matrix <- confusionMatrix(final_model_pred, y_test, mode = "everything")
+
+#accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(confusion_matrix)
+
+#print(paste0("Accuracy: ", round(accuracy, 2)*100))
+```
+
+
+```{r}
+#kfold
+# Define the training control with 5-fold cross validation
+trControl <- trainControl(method = "cv", number = 5)
+
+# Train the SVM model with a radial kernel
+svm_model <- train(AQI_Bucket ~ PM10 + NO + NO2 + NOx + NH3 + CO + SO2 + O3 + Toluene + Xylene, data = train, method = "svmRadial", gamma=best_gamma, degree=best_c, trControl = trControl)
+
+final_model_pred <- predict(svm_model, x_test)
+
+confusion_matrix <- confusionMatrix(final_model_pred, y_test, mode = "everything")
+print(confusion_matrix)
+
+```
+
+
+```{r}
+library(e1071)
+
+# Train an SVM model using the radial basis function (RBF) kernel
+svm_model <- svm(x_train, y_train)
+
+# Make predictions on the test set
+predictions <- predict(svm_model, x_test)
+
+# Calculate the accuracy of the SVM model on the test set
+#svm_accuracy <- sum(predictions == y_test) / length(y_test)
+
+# Evaluate the performance of the model
+confusion_matrix <- table(predictions, y_test)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(confusion_matrix)
+```
+```{r}
+print(paste0("Accuracy: ", round(accuracy, 2)*100))
+```
+
+
