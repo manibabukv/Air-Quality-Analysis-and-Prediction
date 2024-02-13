@@ -1,1 +1,2 @@
-# Air-Quality-Analysis-and-Prediction
+# Air Quality Analysis and Prediction
+The specific problem addressed in this analysis is to identify the key factors affecting air quality and to develop a model that can accurately predict air quality levels based on these factors. The dataset provides information on various air quality parameters. By analyzing this data, we aim to identify the factors that have the greatest impact on air quality and develop a model that can accurately predict air quality levels based on these factors. This analysis can provide valuable insights into air quality management and help in developing effective strategies to reduce air pollution and promote a healthy environment.
